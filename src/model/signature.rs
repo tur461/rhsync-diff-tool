@@ -4,18 +4,21 @@
 
 use super::hash::Hash;
 use crate::fio::FileIO;
+use std::collections::BTreeMap;
 use crate::hashing::adler::Adler32;
 use crate::hashing::x2hash::X2Hash64;
 
 #[derive(Debug, PartialEq)]
 pub struct Signature {
     pub list: Vec<Hash>,
+    pub traced: BTreeMap<usize, bool>,
 }
 
 impl Signature {
     pub fn new() -> Self {
         Self {
             list: Vec::new(),
+            traced: BTreeMap::new(),
         }
     }
 
@@ -31,12 +34,13 @@ impl Signature {
         self.list.len()
     }
 
-    pub fn try_get_position_of(&self, adler: &Adler32) -> Option<usize> {
+    pub fn try_get_position_of(&mut self, adler: &Adler32) -> Option<usize> {
         for (i, hash) in self.list.iter().enumerate() {
             if hash.L1 == adler.sum32() {
                 // println!("L1 hashes match");
-                if hash.L2 == X2Hash64::sum64(&adler.window[..]) {
+                if hash.L2 == X2Hash64::sum64(&adler.window[..]) && !self.traced.contains_key(&i) {
                     // println!("L2 hashes match");
+                    self.traced.insert(i, true);
                     return Some(i);
                 }
             }
@@ -51,7 +55,7 @@ pub fn file_to_sign_list(
     c_size: usize
 ) -> Option<()>{
     let chunk_list = FileIO::read_file_to_chunk_list(path, c_size);
-    println!("Chunk List: {:#?}", chunk_list);
+    // println!("Chunk List: {:#?}", chunk_list);
     if chunk_list.is_none() { return None; }
     
     let chunk_list = chunk_list.unwrap();

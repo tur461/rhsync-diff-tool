@@ -52,18 +52,16 @@ impl CmdArgs {
         // here check files exist, and chunk size validity 
         let res = FileIO::get_file_size(&self.original_file_path);
         if res.is_none() {
-            return Some(());
+            return None;
         }
         self.original_file_size = res.unwrap();
         let res = FileIO::get_file_size(&self.modified_file_path);
         
         if res.is_none() {
-            return Some(());
+            return None;
         }
         self.modified_file_size = res.unwrap();
-        println!("orig: {}\nmod: {}\n", self.original_file_path, self.modified_file_path);
-        println!("orig: {}\nmod: {}\n", self.original_file_size, self.modified_file_size);
-
+    
         let mut c_size = 3;
         if let Some(csz) = opt_arg {
             let parsed = csz.parse::<usize>();

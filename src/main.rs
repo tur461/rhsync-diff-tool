@@ -11,7 +11,7 @@ mod constants;
 
 use fio::FileIO;
 use model::hash;
-use model::chunk::Chunk;
+use model::chunk::Change;
 use model::delta::DiffingDelta;
 use model::signature::Signature;
 
@@ -35,7 +35,7 @@ fn main() {
     // println!("sign list: {:#?}", sign.list);
     // delta list creation
 
-    let mut diff_delta = DiffingDelta::new(&sign);
+    let mut diff_delta = DiffingDelta::new(&mut sign);
 
     if diff_delta.file_to_delta_list(
         &args.modified_file_path,

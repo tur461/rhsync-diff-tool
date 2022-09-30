@@ -5,48 +5,76 @@
 use crate::constants::{Val, Instruction};
 
 #[derive(Debug)]
-pub struct Chunk {
-    pub last_idx: usize,
-    pub start_idx: usize,
-    pub is_missing: bool, 
-    pub missing_bytes: Vec<u8>,
-    // pub instruction: Instruction,
+pub struct Change {
+    // is add before or after a chunk
+    before: Option<bool>,
+    // incase its chunk to be deleted
+    // in original file this will be true
+    del_chunk: bool,
+    // this is treated as per del_chunk!
+    add_or_del_idx: usize,
+    // when new changes to add
+    // this will be Some
+    content: Option<Vec<u8>>,
 }
 
-impl PartialEq for Chunk {
+impl PartialEq for Change {
     fn eq(&self, other: &Self) -> bool {
-        self.last_idx == other.last_idx &&
-        self.start_idx == other.start_idx &&
-        self.is_missing == other.is_missing &&
-        self.missing_bytes == other.missing_bytes
+        self.before == other.before &&
+        self.content == other.content &&
+        self.del_chunk == other.del_chunk &&
+        self.add_or_del_idx == other.add_or_del_idx 
     }
 }
 
-impl Clone for Chunk {
+impl Clone for Change {
     fn clone(&self) -> Self {
         Self {
-            last_idx: self.last_idx.clone(),
-            start_idx: self.start_idx.clone(),
-            is_missing: self.is_missing.clone(),
-            missing_bytes: self.missing_bytes.clone(),
+            before: self.before.clone(),
+            content: self.content.clone(),
+            del_chunk: self.del_chunk.clone(),
+            add_or_del_idx: self.add_or_del_idx.clone(),
         }
     }
 }
 
-impl Chunk {
+impl Change {
     pub fn new(
-        cur_idx: usize, 
-        c_size: usize, 
-        bytes: Vec<u8>, 
-        is_missing: bool,
-        // instruction: Instruction,
+        before: Option<bool>,
+        del_chunk: bool,
+        // c_size is None if del_chunk is true and 
+        // last_or_cur_match_idx is 0
+        // is Some if del_chunk is false and 
+        // last_or_cur_match_idx is != 0
+        c_size: Option<usize>, 
+        content: Option<Vec<u8>>,
+        // if del_chunk true, del index else last match index
+        // meaning of 0 depends on del_chunk!
+        last_or_cur_match_idx: usize
     ) -> Self {
-        Self {
-            is_missing,
-            // instruction,
-            missing_bytes: bytes,
-            start_idx: (cur_idx * c_size), 
-            last_idx: (cur_idx * c_size) + c_size
+        
+        if del_chunk {
+            // means a chunk is to be flagged removed!
+            Self {
+                before,
+                del_chunk,
+                content: None,
+                add_or_del_idx: last_or_cur_match_idx * c_size.unwrap(),
+            }
+        } else { 
+            // means new changes to add!
+            let mut add_idx = last_or_cur_match_idx;
+            if c_size.is_some() {
+                add_idx = (
+                    last_or_cur_match_idx * c_size.unwrap()
+                );
+            }
+            Self {
+                before,
+                content,
+                del_chunk,
+                add_or_del_idx: add_idx,
+            }
         }
     }
 
@@ -54,22 +82,20 @@ impl Chunk {
 
 
 #[cfg(test)]
-mod chunk_test {
+mod Change_test {
     use super::*;
 
     #[test]
-    fn ut_createNewChunk_works() {
-        let ck = Chunk::new(
-            Val::TEST_INDEX, 
+    fn ut_createNewChange_works() {
+        let chg = Change::new(
+            false, 
             Val::TEST_C_SIZE, 
             Vec::new(), 
-            false 
-            // Instruction::NOP
+            1 // insert new change at index 1 + Val::TEST_C_SIZE
         );
-        assert_eq!(ck.is_missing, false);
-        assert_eq!(ck.missing_bytes, []);
-        // assert_eq!(ck.instruction, Instruction::NOP);
-        assert_eq!(ck.start_idx, Val::TEST_INDEX * Val::TEST_C_SIZE);
-        assert_eq!(ck.last_idx, (Val::TEST_INDEX * Val::TEST_C_SIZE) + Val::TEST_C_SIZE);
+        assert_eq!(chg.del_chunk, false);
+        assert_eq!(chg.add_or_del_idx, 1 + Val::TEST_C_SIZE);
+        // assert_eq!(chg.instruction, Instruction::NOP);
+        assert_eq!(chg.content, []);
     }
 }

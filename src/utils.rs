@@ -14,13 +14,13 @@ impl Utility {
 pub struct Err;
 
 impl Err {
-    pub fn print_err(msg: std::io::Error) {
-        println!("Error! {:?}", msg);
+    pub fn print_err(wh:&str, msg: std::io::Error) {
+        println!("Error! {} {:?}",wh, msg);
     }
 
-    pub fn handle(err_kind: ErrKind) {
+    pub fn handle(wh: &str, err_kind: ErrKind) {
         match err_kind {
-            ErrKind::FILE_OPEN => Self::print_err(std::io::Error::last_os_error()),
+            ErrKind::FILE_OPEN => Self::print_err(wh, std::io::Error::last_os_error()),
         }
     }
 }

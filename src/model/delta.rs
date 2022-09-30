@@ -7,44 +7,38 @@
 ///
 
 
-use std::collections::BTreeMap;
-
 use super::hash;
 use crate::fio::FileIO;
-use super::chunk::Chunk;
+use super::chunk::Change;
 use super::signature::Signature;
 use crate::hashing::adler::Adler32;
 
 
 #[derive(Debug, PartialEq)]
 pub struct DiffingDelta<'local> {
-    pub sign: &'local Signature,
-    pub list: BTreeMap<usize, Chunk>,
+    pub sign: &'local mut Signature,
+    pub list: Vec<Change>,
 
 }
 
 impl<'local> DiffingDelta<'local> {
-    pub fn new(sign: &'local Signature) -> Self {
+    pub fn new(sign: &'local mut Signature) -> Self {
         Self {
             sign,
-            list: BTreeMap::new(),
+            list: Vec::new(),
         }
     }
 
-    pub fn add(&mut self, pos: usize, chunk: Chunk) {
-        self.list.insert(pos, chunk);
+    pub fn add(&mut self, change: Change) {
+        self.list.push(change);
     }
 
-    pub fn get(&self, pos: usize) -> Option<&Chunk> {
-        self.list.get(&pos)
+    pub fn get(&self, index: usize) -> Option<&Change> {
+        self.list.get(index)
     }
 
     pub fn len(&self) -> usize {
         self.list.len()
-    }
-
-    pub fn has(&self, pos: usize) -> bool {
-        self.list.contains_key(&pos)
     }
 
     pub fn file_to_delta_list(
@@ -63,15 +57,14 @@ impl<'local> DiffingDelta<'local> {
         let len = bytes.len();
         let mut adler = Adler32::new();
         let mut literals = Vec::<u8>::new();
-        let mut last_valid_pos: Option<usize> = None;
+        let mut last_match_idx = 0usize;
+        let mut matched_chunks = Vec::<usize>::new();
         for (i, byte) in bytes.iter().enumerate() {
             adler.roll_in(*byte);
             
-            if adler.window.len() < c_size {
-                // println!("continue");
+            if adler.window.len() < c_size && i < len-1 {
                 continue;
             }
-            // println!("window {:?}", String::from_utf8_lossy(&adler.window[..]));
             // means no match on prev iteration
             if adler.window.len() > c_size {
                 // println!("rolling on: {}", i);
@@ -79,136 +72,117 @@ impl<'local> DiffingDelta<'local> {
                 literals.push(adler.rolled_out_byte);
             }
 
-            let pos = self.sign.try_get_position_of(&adler);
+            let idx = self.sign.try_get_position_of(&adler);
             // if we have match
-            if pos.is_some() {
-                last_valid_pos = pos;
-                self.handle_match(
-                    pos.unwrap(),
-                    c_size,
-                    &mut adler,
-                    &mut literals
-                );    
+            if idx.is_some() {
+                println!("a match: {:?}", idx);
+                last_match_idx = idx.unwrap();
+                // save cur match idx for later use
+                matched_chunks.push(idx.unwrap());
+                // if we have some unsaved changes
+                if literals.len() > 0 {
+                    let mut temp_cz = Some(c_size);
+                    if last_match_idx == 0 {
+                        temp_cz = None;
+                    }
+                    self.handle_new_change(
+                        Some(true),
+                        last_match_idx,
+                        temp_cz,
+                        literals.clone()
+                    );
+                    // after saving new changes update last match idx
+                    literals.drain(..);
+                }
+                
+                adler.reset();
             }
         }
         // fill chunks which are in signature list
         // but not in delta list
-        // indicate same by is_missing flag
-        let last_i = self.fill_missing_chunks_if_any(c_size);
-        //if its semi-filled last chunk 
-        self.process_after_math(
-            c_size, 
-            last_valid_pos, 
-            last_i, 
-            file1_size, 
-            &mut literals, 
-            &mut adler
-        );
+        // indicate same by del_chunk flag
+        self.fill_missing_chunks_if_any(&matched_chunks, c_size);
+        //if its semi-filled last chunk ..to be handled
+        //...
+        // we have missed some new changes in main loop
+        // because it ended or last chunk didn't match
+        // and remained in adler.window
+        if adler.window.len() > 0 || literals.len() > 0 {
+            if adler.window.len() > 0 {
+                literals.append(&mut adler.window)
+            }
+            if matched_chunks.len() > 0 && last_match_idx == 0 {
+                last_match_idx += c_size;
+            } else {
+                last_match_idx = (last_match_idx * c_size) + c_size;
+            }
+            self.handle_new_change(
+                Some(false),
+                last_match_idx,
+                None,
+                literals
+            )
+        }
+        // if 
         return Some(());
     }
 
-    fn handle_match(
+    fn handle_new_change(
         &mut self,
-        pos: usize, 
-        c_size: usize,
-        adler: &mut Adler32,
-        literals: &mut Vec<u8> 
+        before: Option<bool>,
+        last_match_idx: usize, 
+        c_size: Option<usize>,
+        literals: Vec<u8> 
     ) {
-        let chunk = Chunk::new(
-            pos,
-            c_size,
-            literals.clone(),
+        let change = Change::new(
+            before,
             false,
+            c_size,
+            Some(literals.clone()),
+            last_match_idx
         );
         
-        self.add(pos, chunk);
-        if literals.len() > 0 {
-            literals.drain(..);
-        }
-        adler.reset();
+        self.add(change);
     }
 
-    fn fill_missing_chunks_if_any(&mut self, c_size: usize) -> usize {
+    fn fill_missing_chunks_if_any(&mut self, matched_chunks: &Vec<usize>, cz: usize) {
         let mut i = 0;
+        let mut j = 0;
+        let len1 = matched_chunks.len();
+        let len2 = self.sign.list.len();
+        // println!("matched: {:?}", matched_chunks);
         loop {
-            if i == self.sign.list.len() {
+            // j depends on sign list
+            // we will terminate loop on that only
+            // as matched chunks may be less than that
+            if j == len2 {
                 break;
             }
-            if !self.has(i) {
-                self.add(i, Chunk::new(
-                    i,
-                    c_size,
-                    [].to_vec(),
-                    true,
+            
+            if  i < len1 && matched_chunks[i] == j{
+                // println!("no del i: {} j: {} mat: {}", i, j, matched_chunks[i]);
+                // we hit a matched block in signatures
+                i += 1;
+            } else {
+                // println!("del i: {} j: {}", i, j);
+                self.add(Change::new(
+                    None,
+                    true, // flag to be deleted!
+                    Some(cz),
+                    None,
+                    j,
                 ))
             }
-            i += 1;
+            j += 1;
         }
-        i
     }
-
-    fn process_after_math(
-        &mut self, 
-        c_size: usize,
-        last_valid_pos: Option<usize>,
-        last_i: usize,
-        len: usize,
-        literals: &mut Vec<u8>,
-        adler: &mut Adler32,
-
-    ) {
-        if literals.len() > 0 && adler.window.len() >= c_size {
-            literals.append(&mut adler.window);
-            println!("missed: {:?}", String::from_utf8_lossy(&literals[..]));
-            if last_valid_pos.is_some() {
-                let pos = last_valid_pos.unwrap();
-                let mut chunk = self
-                .list
-                .get_mut(&(pos + 1));
-
-                if chunk.is_some() {
-                    // there is a chunk next to the chunk at valid pos
-                    // but that obv be missing, lets add literals to that only!
-                    chunk.unwrap().missing_bytes.append(literals);
-                } else { // there is no chunk next to the chunk at valid position
-                    // so create a new chunk and flag it not_missing with literals
-                    // to be appended
-                    self.add(pos+1, Chunk{
-                        start_idx: pos + 1,
-                        last_idx: pos + c_size,
-                        missing_bytes: literals.to_vec(),
-                        is_missing: false,
-                    });
-                }
-                
-            } else { // this case might not be possible
-                // if there is no chunk at all
-                // add our own chunk
-                self.add(0, Chunk::new(
-                    0,
-                    c_size,
-                    literals.to_vec(),
-                    false,                    
-                ))
-            }
-        }
-        println!("valid pos: {:?}, size: {}", last_valid_pos, len);
-        let mut res = self.list.get_mut(&last_valid_pos.unwrap());
-        if res.is_some() {
-            let ch = res.unwrap(); 
-            if ch.last_idx >= len {
-                ch.last_idx = len - 1;
-            }
-        }
-    } 
 }
 
 
 #[cfg(test)]
 mod delta_test {
     use super::*;
-    use super::super::chunk::Chunk;
-    use crate::constants::{Instruction};
+    use super::super::chunk::Change;
 
     const chunk: &[u8] = &"chunk".as_bytes();
 
@@ -240,12 +214,11 @@ mod delta_test {
         assert_ne!(delta.sign.get(0), None);
 
         // ------------- add -------------------
-        let mut ch = Chunk::new(
-            0,
-            chunk.len(),
-            [].to_owned(), 
-            false
-            // Instruction::NOP
+        let mut ch = Change::new(
+            false,
+            None,
+            chunk[2..6].to_owned(), 
+            0
         );
 
         delta.add(ch.clone());

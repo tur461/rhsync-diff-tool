@@ -35,7 +35,7 @@ impl FileIO {
     pub fn get_file_size(path: &str) -> Option<usize> {
         let f = File::open(path);
         if f.is_err() {
-            Err::handle(ErrKind::FILE_OPEN);
+            Err::handle(path, ErrKind::FILE_OPEN);
             return None;
         }
         
@@ -46,7 +46,7 @@ impl FileIO {
         let f = File::open(path);
         if f.is_err() {
             println!("{:#?}", f);
-            Err::handle(ErrKind::FILE_OPEN);
+            Err::handle(path, ErrKind::FILE_OPEN);
             return None;
         }
         let mut reader = BufReader::new(f.unwrap());
