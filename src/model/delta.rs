@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 /*
-    During patching, this program works the following way:
+    During patching, this program's output works the following way:
     
     1. first all the Changes (Change object) with del_chunk true, will be applied where 
         add_or_del_idx indicates index of the chunk in original file.
@@ -53,17 +53,15 @@ impl<'local> DiffingDelta<'local> {
         path: &str,
         c_size: usize
     ) -> Option<()> {
-
-        // to ne implemented..
-        //...
+        // get all bytes from file
         let bytes = FileIO::read_file_to_bytes(path);
         if bytes.is_none() { return None; }
 
         let bytes = bytes.unwrap();
         let len = bytes.len();
         let mut adler = Adler32::new();
-        let mut literals = Vec::<u8>::new();
         let mut last_match_idx = 0usize;
+        let mut literals = Vec::<u8>::new();
         let mut matched_chunks = Vec::<usize>::new();
         for (i, byte) in bytes.iter().enumerate() {
             adler.roll_in(*byte);
@@ -73,15 +71,17 @@ impl<'local> DiffingDelta<'local> {
             }
             // means no match on prev iteration
             if adler.window.len() > c_size {
-                // println!("rolling on: {}", i);
+                // this makes window sliding/rolling
                 adler.roll_out();
+                // save rolled out bytes into literals
+                // so it could be added to change object later-on
                 literals.push(adler.rolled_out_byte);
             }
 
+            // try getting a match
             let idx = self.sign.try_get_position_of(&adler);
             // if we have match
             if idx.is_some() {
-                println!("a match: {:?}", idx);
                 last_match_idx = idx.unwrap();
                 // save cur match idx for later use
                 matched_chunks.push(idx.unwrap());
@@ -91,16 +91,17 @@ impl<'local> DiffingDelta<'local> {
                     if last_match_idx == 0 {
                         temp_cz = None;
                     }
+                    // save change into delta list
                     self.handle_new_change(
                         Some(true),
                         last_match_idx,
                         temp_cz,
                         literals.clone()
                     );
-                    // after saving new changes update last match idx
+                    // reset literals
                     literals.drain(..);
                 }
-                
+                // reset adler for finding next chunk
                 adler.reset();
             }
         }
@@ -108,20 +109,28 @@ impl<'local> DiffingDelta<'local> {
         // but not in delta list
         // indicate same by del_chunk flag
         self.fill_missing_chunks_if_any(&matched_chunks, c_size);
-        //if its semi-filled last chunk ..to be handled
-        //...
+        
+        // corner-case: (where above loop fails)
         // we have missed some new changes in main loop
         // because it ended or last chunk didn't match
         // and remained in adler.window
+        // check if there are chars in window which didn't got matched
+        // and loop ended
+        // if nothing in there then check whats in literals
         if adler.window.len() > 0 || literals.len() > 0 {
             if adler.window.len() > 0 {
+                // put window chars into literals
                 literals.append(&mut adler.window)
             }
+            // just handling indexing
             if matched_chunks.len() > 0 && last_match_idx == 0 {
                 last_match_idx += c_size;
             } else {
                 last_match_idx = (last_match_idx * c_size) + c_size;
             }
+            // finally add the literals as new change
+            // into delta list but with 'before' flag set false
+            // means add these changes 'after' last chunk matched!
             self.handle_new_change(
                 Some(false),
                 last_match_idx,
@@ -129,7 +138,7 @@ impl<'local> DiffingDelta<'local> {
                 literals
             )
         }
-        // if 
+
         return Some(());
     }
 
@@ -140,6 +149,7 @@ impl<'local> DiffingDelta<'local> {
         c_size: Option<usize>,
         literals: Vec<u8> 
     ) {
+        // create a Change object
         let change = Change::new(
             before,
             false,
@@ -147,16 +157,19 @@ impl<'local> DiffingDelta<'local> {
             Some(literals.clone()),
             last_match_idx
         );
-        
+        // finally save into the delta list!!
         self.add(change);
     }
 
-    fn fill_missing_chunks_if_any(&mut self, matched_chunks: &Vec<usize>, cz: usize) {
+    fn fill_missing_chunks_if_any(
+        &mut self,
+        matched_chunks: &Vec<usize>,
+        cz: usize
+    ) {
         let mut i = 0;
         let mut j = 0;
         let len1 = matched_chunks.len();
         let len2 = self.sign.list.len();
-        // println!("matched: {:?}", matched_chunks);
         loop {
             // j depends on sign list
             // we will terminate loop on that only
@@ -186,7 +199,6 @@ impl<'local> DiffingDelta<'local> {
 #[cfg(test)]
 mod delta_test {
     use super::*;
-    use super::super::changes::Change;
 
     const chunk: &[u8] = &"chunk".as_bytes();
 
@@ -195,7 +207,7 @@ mod delta_test {
         let mut sign = Signature::new();
         sign.add(chunk);
         
-        let delta = DiffingDelta::new(&sign);
+        let delta = DiffingDelta::new(&mut sign);
         
         assert_eq!(delta.list.len(), 0);
         assert_eq!(delta.list.get(0), None);
@@ -209,19 +221,20 @@ mod delta_test {
         let mut sign = Signature::new();
         sign.add(chunk);
         
-        let mut delta = DiffingDelta::new(&sign);
+        let mut delta = DiffingDelta::new(&mut sign);
         
         assert_eq!(delta.list.len(), 0);
-        assert_eq!(delta.list.get(0), None);
+        assert_eq!(delta.list.get(0), None) ;
         
         assert_eq!(delta.sign.len(), 1);
         assert_ne!(delta.sign.get(0), None);
 
         // ------------- add -------------------
         let mut ch = Change::new(
+            Some(true),
             false,
             None,
-            chunk[2..6].to_owned(), 
+            Some(chunk[0..3].to_owned()), 
             0
         );
 

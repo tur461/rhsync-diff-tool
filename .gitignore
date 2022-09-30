@@ -2,3 +2,5 @@
 Cargo.lock
 *.txt
 *.info
+
+!test/files/*.txt

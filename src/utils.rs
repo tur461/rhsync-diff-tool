@@ -9,6 +9,10 @@ impl Utility {
     pub fn panic(msg: &str) {
         panic!("{}", msg);
     }
+
+    pub fn get_num_of_chunks(f_size: usize, c_size: usize) -> usize {
+        (f_size as f32/c_size as f32).ceil() as usize
+    }
 }
 
 pub struct Err;

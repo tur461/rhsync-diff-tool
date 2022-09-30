@@ -2,16 +2,6 @@
 #![allow(unused_imports)]
 #![allow(non_camel_case_types)]
 
-
-#[non_exhaustive]
-#[derive(Debug, PartialEq, Clone)]
-pub enum Instruction {
-    ADD,
-    DEL,
-    MOV,
-    NOP,
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum ErrKind {
     FILE_OPEN,

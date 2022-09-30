@@ -235,34 +235,6 @@ mod test {
         // ----------------------------------------
         
         assert_eq!(adler2.window, b[1..5]);
-        // slide more for Q
-        adler1.write_bytes(&a[4..8]);
-
-        for c in &b[5..9] {
-            adler2.roll_in(*c);
-        }
-
-        assert_eq!(adler2.count, 8);
-        assert_eq!(adler2.window, b[1..9]);
-        assert_ne!(adler1.window, adler2.window);
-        // hashes must not mach
-        assert_ne!(adler1.sum32(), adler2.sum32());
-        // -------------- rolling --------------
-        // roll window by 1 step 
-        adler2.roll_out();
-
-        let mut c = adler2.rolled_out_byte;
-        
-        assert_eq!(c, b[5]);
-        assert_eq!(adler2.count, 7);
-        assert_eq!(adler2.window, b[2..9]);
-
-        adler2.roll_in(b[9]);
-
-        assert_eq!(adler2.count, 8);
-        assert_eq!(adler2.window, b[1..5]);
-        // now hashes must mach
-        assert_eq!(adler2.sum32(), adler2.sum32());
         // ----------------------------------------
 
     }

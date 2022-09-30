@@ -2,21 +2,21 @@
 #![allow(unused_imports)]
 #![allow(non_snake_case)]
 
-use crate::constants::{Val, Instruction};
+use crate::constants::{Val};
 
 #[derive(Debug)]
 pub struct Change {
     // is add new change before or after a chunk
     // indicated by add_or_del_idx
-    before: Option<bool>,
+    pub before: Option<bool>,
     // incase its chunk to be deleted
     // in original file this will be true
-    del_chunk: bool,
+    pub del_chunk: bool,
     // this is treated as per del_chunk!
-    add_or_del_idx: usize,
+    pub add_or_del_idx: usize,
     // when new changes to add
     // this will be Some
-    content: Option<Vec<u8>>,
+    pub content: Option<Vec<u8>>,
 }
 
 impl PartialEq for Change {
@@ -81,20 +81,20 @@ impl Change {
 
 
 #[cfg(test)]
-mod Change_test {
+mod change_test {
     use super::*;
 
     #[test]
     fn ut_createNewChange_works() {
         let chg = Change::new(
+            Some(true),
             false, 
-            Val::TEST_C_SIZE, 
-            Vec::new(), 
-            1 // insert new change at index 1 + Val::TEST_C_SIZE
+            Some(Val::TEST_C_SIZE), 
+            Some(Vec::new()), 
+            1
         );
         assert_eq!(chg.del_chunk, false);
-        assert_eq!(chg.add_or_del_idx, 1 + Val::TEST_C_SIZE);
-        // assert_eq!(chg.instruction, Instruction::NOP);
-        assert_eq!(chg.content, []);
+        assert_eq!(chg.add_or_del_idx, Val::TEST_C_SIZE);
+        assert_eq!(chg.content.unwrap(), []);
     }
 }

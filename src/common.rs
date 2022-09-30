@@ -1,4 +1,5 @@
 use crate::fio::FileIO;
+use super::utils::Utility;
 use super::constants::Val;
 
 pub struct CmdArgs {
@@ -43,31 +44,12 @@ impl CmdArgs {
         }
         self.original_file_size = res.unwrap();
         
-        if !self.has_enough_chunks(self.original_file_size) {
-            println!(
-                "File: {}, must have at-least {} chunks!", 
-                self.original_file_path, 
-                Val::MIN_NUM_OF_CHUNKS
-            );
-            return None;
-        }
-        
-        
         let res = FileIO::get_file_size(&self.modified_file_path);
         
         if res.is_none() {
             return None;
         }
         self.modified_file_size = res.unwrap();
-
-        if !self.has_enough_chunks(self.modified_file_size) {
-            println!(
-                "File: {}, must have at-least {} chunks!", 
-                self.modified_file_path, 
-                Val::MIN_NUM_OF_CHUNKS
-            );
-            return None;
-        }
 
         if let Some(csz) = opt_arg {
             let parsed = csz.parse::<usize>();
@@ -79,6 +61,24 @@ impl CmdArgs {
                 return None;
             }
         }
+        if !self.has_enough_chunks(self.original_file_size) {
+            println!(
+                "File: {}, must have at-least {} chunks!", 
+                self.original_file_path, 
+                Val::MIN_NUM_OF_CHUNKS
+            );
+            return None;
+        }
+
+        if !self.has_enough_chunks(self.modified_file_size) {
+            println!(
+                "File: {}, must have at-least {} chunks!", 
+                self.modified_file_path, 
+                Val::MIN_NUM_OF_CHUNKS
+            );
+            return None;
+        }
+
         Some(())
     }
 
@@ -95,8 +95,15 @@ impl CmdArgs {
     }
 
     fn has_enough_chunks(&self, f_size: usize) -> bool {
-        (
-            f_size as f32 / self.chunk_size as f32
-        ).ceil() >= Val::MIN_NUM_OF_CHUNKS as f32
+        Utility::get_num_of_chunks(
+            f_size, 
+            self.chunk_size
+        ) >= Val::MIN_NUM_OF_CHUNKS
     }
+}
+
+
+#[cfg(test)]
+mod common_test {
+    
 }

@@ -11,6 +11,9 @@ use crate::hashing::x2hash::X2Hash64;
 #[derive(Debug, PartialEq)]
 pub struct Signature {
     pub list: Vec<Hash>,
+    // used to prevent duplicate chunks
+    // this happens when chunk chars are same 
+    // for multiple chunks in original file 
     pub traced: BTreeMap<usize, bool>,
 }
 
@@ -23,7 +26,10 @@ impl Signature {
     }
 
     pub fn add(&mut self, bytes: &[u8]) {
-        self.list.push(Hash::new(bytes));
+        self.list.push(
+            // save as hash object
+            Hash::new(bytes)
+        );
     }
 
     pub fn get(&self, index: usize) -> Option<&Hash> {
@@ -37,9 +43,12 @@ impl Signature {
     pub fn try_get_position_of(&mut self, adler: &Adler32) -> Option<usize> {
         for (i, hash) in self.list.iter().enumerate() {
             if hash.L1 == adler.sum32() {
-                // println!("L1 hashes match");
-                if hash.L2 == X2Hash64::sum64(&adler.window[..]) && !self.traced.contains_key(&i) {
-                    // println!("L2 hashes match");
+                // L1 hash matches;
+                if 
+                    hash.L2 == X2Hash64::sum64(&adler.window[..]) &&
+                    // check if its a duplicate chunk already matched! 
+                    !self.traced.contains_key(&i) {
+                    // L2 hash matches;
                     self.traced.insert(i, true);
                     return Some(i);
                 }
@@ -48,23 +57,29 @@ impl Signature {
         return None;
     } 
 
+    // convert file bytes to chunks and then list of hash objects
+    pub fn file_to_sign_list(
+        &mut self,
+        path: &str,
+        c_size: usize,
+        f_size: usize
+    ) -> Option<()>{
+        // get list of chunks from file bytes (read internally)
+        let chunk_list = FileIO::read_file_to_chunk_list(
+            path, 
+            c_size, 
+            f_size
+        );
+        if chunk_list.is_none() { return None; }
+        
+        let chunk_list = chunk_list.unwrap();
 
-pub fn file_to_sign_list(
-    &mut self,
-    path: &str,
-    c_size: usize
-) -> Option<()>{
-    let chunk_list = FileIO::read_file_to_chunk_list(path, c_size);
-    // println!("Chunk List: {:#?}", chunk_list);
-    if chunk_list.is_none() { return None; }
-    
-    let chunk_list = chunk_list.unwrap();
-
-    for chunk in chunk_list.into_iter() {
-        self.add(&chunk[..]);
+        for chunk in chunk_list.into_iter() {
+            // this adds chunk as hash object internally
+            self.add(&chunk[..]);
+        }
+        Some(())
     }
-    Some(())
-}
 
 }
 
