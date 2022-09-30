@@ -9,9 +9,6 @@ mod common;
 mod hashing;
 mod constants;
 
-use fio::FileIO;
-use model::hash;
-use model::chunk::Change;
 use model::delta::DiffingDelta;
 use model::signature::Signature;
 
@@ -39,8 +36,7 @@ fn main() {
 
     if diff_delta.file_to_delta_list(
         &args.modified_file_path,
-        args.chunk_size,
-        args.original_file_size
+        args.chunk_size
     ).is_none() { return; }
 
     println!("delta list: {:#?}", diff_delta.list);

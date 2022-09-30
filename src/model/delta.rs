@@ -2,14 +2,21 @@
 #![allow(unused_imports)]
 #![allow(non_snake_case)]
 
-/// literals are attached to the chunk, where these will be placed in original file before that chunk
-///
-///
+/*
+    During patching, this program works the following way:
+    
+    1. first all the Changes (Change object) with del_chunk true, will be applied where 
+        add_or_del_idx indicates index of the chunk in original file.
+    2. After 1st step, apply Changes with del_chunk = false before/after the chunk whose index 
+        is indicated by add_or_del_idx . before or after is indicated by before flag
 
+    Note:
+        for before true apply those changes first, then apply those for which before is false  
+*/
 
 use super::hash;
 use crate::fio::FileIO;
-use super::chunk::Change;
+use super::changes::Change;
 use super::signature::Signature;
 use crate::hashing::adler::Adler32;
 
@@ -44,8 +51,7 @@ impl<'local> DiffingDelta<'local> {
     pub fn file_to_delta_list(
         &mut self,
         path: &str,
-        c_size: usize,
-        file1_size: usize
+        c_size: usize
     ) -> Option<()> {
 
         // to ne implemented..
@@ -160,14 +166,12 @@ impl<'local> DiffingDelta<'local> {
             }
             
             if  i < len1 && matched_chunks[i] == j{
-                // println!("no del i: {} j: {} mat: {}", i, j, matched_chunks[i]);
                 // we hit a matched block in signatures
                 i += 1;
             } else {
-                // println!("del i: {} j: {}", i, j);
                 self.add(Change::new(
                     None,
-                    true, // flag to be deleted!
+                    true, // this flag make chunk removed
                     Some(cz),
                     None,
                     j,
@@ -182,7 +186,7 @@ impl<'local> DiffingDelta<'local> {
 #[cfg(test)]
 mod delta_test {
     use super::*;
-    use super::super::chunk::Change;
+    use super::super::changes::Change;
 
     const chunk: &[u8] = &"chunk".as_bytes();
 

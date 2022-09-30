@@ -6,7 +6,8 @@ use crate::constants::{Val, Instruction};
 
 #[derive(Debug)]
 pub struct Change {
-    // is add before or after a chunk
+    // is add new change before or after a chunk
+    // indicated by add_or_del_idx
     before: Option<bool>,
     // incase its chunk to be deleted
     // in original file this will be true
@@ -65,9 +66,7 @@ impl Change {
             // means new changes to add!
             let mut add_idx = last_or_cur_match_idx;
             if c_size.is_some() {
-                add_idx = (
-                    last_or_cur_match_idx * c_size.unwrap()
-                );
+                add_idx = last_or_cur_match_idx * c_size.unwrap();
             }
             Self {
                 before,

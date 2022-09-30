@@ -1,28 +1,4 @@
-// use std::io;
-
-// pub fn adler32<R: std::io::Read>(mut reader: R) -> std::io::Result<u32> {
-//     let mut hash = Adler32::new();
-//     let mut buffer = [0u8; NMAX];
-//     let mut read = reader.read(&mut buffer)?;
-//     while read > 0 {
-//         hash.write_bytes(&buffer[..read]);
-//         read = reader.read(&mut buffer)?;
-//     }
-//     Ok(hash.sum32())
-// }
-
-// fn adler32_slow<R: io::Read>(reader: R) -> io::Result<u32> {
-//     let mut a: u32 = 1;
-//     let mut b: u32 = 0;
-
-//     for byte in reader.bytes() {
-//         let byte = byte? as u32;
-//         a = (a + byte) % BASE;
-//         b = (b + a) % BASE;
-//     }
-
-//     Ok((b << 16) | a)
-// }
+#![allow(unused_assignments)]
 
 use std::fs::File;
 use crate::utils::Err;
@@ -70,7 +46,6 @@ impl FileIO {
         let mut i = 0usize;
         let mut s = 0usize;
         let mut e = 0usize;
-        let mut flag = true;
         let len = bytes.len();
         let mut buf = Vec::<Vec<u8>>::with_capacity((f_size as f32/c_size as f32).ceil() as usize);
         while i < len {

@@ -20,19 +20,6 @@ impl CmdArgs {
         }
     }
     
-    fn print_usage(program: String) {
-        println!("
-        USAGE: {0} <file_1_path> <file_2_path> <optional chunk_size>
-        
-        Examples:
-            {0} abc.txt def.txt
-            {0} some.txt other.txt 4
-            {0} some.bin other.bin 7
-        
-        ", program);
-    }
-    
-
     pub fn parse(&mut self) -> Option<()>{
         let mut args = std::env::args();
         let program = args.nth(0).unwrap();
@@ -55,14 +42,33 @@ impl CmdArgs {
             return None;
         }
         self.original_file_size = res.unwrap();
+        
+        if !self.has_enough_chunks(self.original_file_size) {
+            println!(
+                "File: {}, must have at-least {} chunks!", 
+                self.original_file_path, 
+                Val::MIN_NUM_OF_CHUNKS
+            );
+            return None;
+        }
+        
+        
         let res = FileIO::get_file_size(&self.modified_file_path);
         
         if res.is_none() {
             return None;
         }
         self.modified_file_size = res.unwrap();
-    
-        let mut c_size = 3;
+
+        if !self.has_enough_chunks(self.modified_file_size) {
+            println!(
+                "File: {}, must have at-least {} chunks!", 
+                self.modified_file_path, 
+                Val::MIN_NUM_OF_CHUNKS
+            );
+            return None;
+        }
+
         if let Some(csz) = opt_arg {
             let parsed = csz.parse::<usize>();
             if parsed.is_ok() {
@@ -76,9 +82,21 @@ impl CmdArgs {
         Some(())
     }
 
-    fn has_enough_chunks(f_size: usize, c_size: usize) -> bool {
+    fn print_usage(program: String) {
+        println!("
+        USAGE: {0} <file_1_path> <file_2_path> <optional chunk_size>
+        
+        Examples:
+            {0} abc.txt def.txt
+            {0} some.txt other.txt 4
+            {0} some.bin other.bin 7
+        
+        ", program);
+    }
+
+    fn has_enough_chunks(&self, f_size: usize) -> bool {
         (
-            f_size as f32 / c_size as f32
+            f_size as f32 / self.chunk_size as f32
         ).ceil() >= Val::MIN_NUM_OF_CHUNKS as f32
     }
 }
